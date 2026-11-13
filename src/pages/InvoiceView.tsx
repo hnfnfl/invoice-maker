@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { createRevision, createSettlement, db, deleteInvoice, deriveStatus, duplicateInvoice, getTemplate, reserveReceiptNumber } from '../db';
+import { createRevision, createSettlement, db, deleteInvoice, deriveStatus, duplicateInvoice, ensureReceipt, getTemplate } from '../db';
 import { useInvoicePdf, useSettings } from '../hooks';
 import { computeTotals, displayDecimals, formatMoney } from '../lib/money';
 import { addDays } from '../lib/id';
@@ -397,11 +397,8 @@ function PaymentsCard({ inv, settings, tpl }: { inv: Invoice; settings: Settings
     if (!tpl) return;
     setBusy(p.id);
     try {
-      let payment = p;
-      if (!p.receiptNumber) {
-        payment = { ...p, receiptNumber: await reserveReceiptNumber(p.date) };
-        await db.invoices.update(inv.id, { payments: inv.payments.map((x) => (x.id === p.id ? payment : x)), updatedAt: Date.now() });
-      }
+      await ensureReceipt(inv.id, p.id);
+      const payment = (await db.invoices.get(inv.id))?.payments.find((x) => x.id === p.id) ?? p;
       const { renderReceiptPdf } = await import('../pdf/document');
       const blob = await renderReceiptPdf(inv, payment, tpl, settings);
       // Sharing needs a fresh tap: iOS rejects navigator.share once the original gesture has expired during rendering.

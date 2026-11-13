@@ -87,7 +87,11 @@ Urutan perhitungan di `src/lib/money.ts` (`computeTotals`):
 - Menghapus invoice terbaru mengembalikan nomornya, supaya draft yang batal tidak meninggalkan celah.
 - Saat tanggal invoice dipindah ke periode lain, nomor otomatis diambil dari periode baru (`renumberForDate`).
 - Revisi memakai nomor asal dengan akhiran `-R1`, `-R2`, dan invoice lama ditandai batal.
-- Kwitansi punya pola penomoran sendiri.
+- Kwitansi punya pola dan counter penomoran sendiri. Nomornya diambil sekali per pembayaran saat kwitansi pertama dibuka.
+- Kwitansi disimpan di dalam `Payment` (bukan tabel sendiri): `receiptNumber` untuk nomor otomatis dan `receipt` untuk field yang diedit pengguna (nomor, penerima, nominal, keperluan, tanggal, metode, meterai). Field yang tidak diedit mengikuti invoice dan pembayaran lewat `resolveReceipt` (`src/lib/receipt.ts`).
+- Nomor manual (`receipt.number`) tidak menyentuh counter, dan nomor otomatis tetap tersimpan sehingga bisa dikembalikan. Nomor kembar hanya diperingatkan, dan invoice yang sudah digantikan revisi tidak ikut dicek.
+- Menghapus pembayaran mengembalikan nomor kwitansinya ke counter kalau itu nomor terakhir dan tidak dipakai salinan di revisi.
+- Mengubah nominal kwitansi tidak mengubah pembayaran, saldo invoice, atau Laporan.
 
 ---
 

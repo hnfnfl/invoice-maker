@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Client, Invoice, NumberingRule, Product, Settings, Status, TemplateConfig } from './types';
+import type { Client, Invoice, NumberingRule, Product, ReceiptOverrides, Settings, Status, TemplateConfig } from './types';
 import { BUILTIN_TEMPLATES, DEFAULT_TEMPLATE_ID, normalizeTemplate } from './templates';
 import { addDays, todayISO, uid } from './lib/id';
 import { clientCode, formatNumberPattern, periodKey } from './lib/numbering';
@@ -269,14 +269,62 @@ export async function createSettlement(src: Invoice, label: string) {
   });
 }
 
-export async function reserveReceiptNumber(dateISO: string): Promise<string> {
-  return db.transaction('rw', db.settings, async () => {
+// Gives the payment its automatic receipt number once; calling it again returns the same one.
+export async function ensureReceipt(invoiceId: string, paymentId: string): Promise<void> {
+  await db.transaction('rw', db.settings, db.invoices, async () => {
+    const inv = await db.invoices.get(invoiceId);
+    const pay = inv?.payments.find((p) => p.id === paymentId);
+    if (!inv || !pay || pay.receiptNumber) return;
     const s = await getSettings();
     const rule = { ...s.receiptNumbering };
-    const { number } = reserveNumber(rule, dateISO);
+    const r = reserveNumber(rule, pay.date);
     await db.settings.put({ ...s, receiptNumbering: rule });
-    return number;
+    await db.invoices.update(invoiceId, {
+      payments: inv.payments.map((p) => (p.id === paymentId ? { ...p, receiptNumber: r.number, receiptKey: r.key, receiptSeq: r.seq } : p)),
+      updatedAt: Date.now(),
+    });
   });
+}
+
+// Passing undefined for a field puts it back to automatic.
+export async function saveReceipt(invoiceId: string, paymentId: string, overrides: ReceiptOverrides): Promise<void> {
+  await db.transaction('rw', db.invoices, async () => {
+    const inv = await db.invoices.get(invoiceId);
+    if (!inv) return;
+    const clean = Object.fromEntries(Object.entries(overrides).filter(([, v]) => v !== undefined)) as ReceiptOverrides;
+    await db.invoices.update(invoiceId, {
+      payments: inv.payments.map((p) => (p.id === paymentId ? { ...p, receipt: Object.keys(clean).length ? clean : undefined } : p)),
+      updatedAt: Date.now(),
+    });
+  });
+}
+
+// Like deleting the latest invoice: the receipt number goes back to the counter if it was the last one and nothing else uses it.
+export async function deletePayment(invoiceId: string, paymentId: string): Promise<void> {
+  await db.transaction('rw', db.settings, db.invoices, async () => {
+    const inv = await db.invoices.get(invoiceId);
+    const pay = inv?.payments.find((p) => p.id === paymentId);
+    if (!inv || !pay) return;
+    await db.invoices.update(invoiceId, { payments: inv.payments.filter((p) => p.id !== paymentId), updatedAt: Date.now() });
+    if (!pay.receiptKey || !pay.receiptSeq) return;
+    const usedElsewhere = (await db.invoices.toArray()).some((i) =>
+      i.payments.some((p) => p.receiptKey === pay.receiptKey && p.receiptSeq === pay.receiptSeq && !(i.id === invoiceId && p.id === paymentId)),
+    );
+    const s = await getSettings();
+    if (!usedElsewhere && s.receiptNumbering.counters[pay.receiptKey] === pay.receiptSeq) {
+      const counters = { ...s.receiptNumbering.counters, [pay.receiptKey]: pay.receiptSeq - 1 };
+      await db.settings.put({ ...s, receiptNumbering: { ...s.receiptNumbering, counters } });
+    }
+  });
+}
+
+// Invoices replaced by a revision are skipped, since the revision carries copies of the same receipts.
+export async function findReceiptDuplicates(number: string, except: { invoiceId: string; paymentId: string }): Promise<Invoice[]> {
+  if (!number) return [];
+  const all = await db.invoices.filter((i) => !i.supersededBy).toArray();
+  return all.filter((i) =>
+    i.payments.some((p) => !(i.id === except.invoiceId && p.id === except.paymentId) && (p.receipt?.number ?? p.receiptNumber) === number),
+  );
 }
 
 export function deriveStatus(inv: Invoice, today = todayISO()): Status {
