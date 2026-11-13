@@ -230,7 +230,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               to={n.to}
               end={n.end}
               className={({ isActive }) =>
-                `flex min-h-14 flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors ${
+                `flex min-h-14 flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors ${
                   isActive ? 'text-clay font-bold' : 'text-muted'
                 }`
               }
