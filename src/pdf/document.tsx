@@ -8,6 +8,7 @@ import { Bingkai, Geometri, Kartu, Kop, Korporat, Lengkung, Studio } from './lay
 import { Label, Logo, BusinessName, BusinessDetails } from './parts';
 import { terbilang } from '../lib/terbilang';
 import { formatDate } from '../lib/labels';
+import { resolveReceipt } from '../lib/receipt';
 
 // react-pdf checks Buffer.isBuffer after loading images and logs a warning per image when it's missing.
 (globalThis as { Buffer?: unknown }).Buffer ??= Buffer;
@@ -40,8 +41,8 @@ export function InvoiceDocument({ ctx }: { ctx: DocCtx }) {
 
 function ReceiptDocument({ ctx, payment }: { ctx: DocCtx; payment: Payment }) {
   const { L, c, fz } = ctx;
-  const words = terbilang(payment.amount, ctx.inv.currency, ctx.inv.lang);
-  const purpose = ctx.inv.items.map((i) => i.description).filter(Boolean).join(', ') || ctx.title;
+  const r = resolveReceipt(ctx.inv, payment, ctx.title);
+  const words = terbilang(r.amount, ctx.inv.currency, ctx.inv.lang);
   const row = (k: string, v: string, bold = false) => (
     <View style={{ flexDirection: 'row', paddingVertical: 7, borderBottomWidth: 0.6, borderBottomColor: hexAlpha(c.text, 0.15) }}>
       <Text style={{ width: 130, color: c.muted, fontSize: fz.base }}>{k}</Text>
@@ -50,7 +51,7 @@ function ReceiptDocument({ ctx, payment }: { ctx: DocCtx; payment: Payment }) {
   );
   const sig = ctx.s.signature;
   return (
-    <Document title={`${L.receipt} ${payment.receiptNumber ?? ''}`} creator="Invoice Maker" producer="Invoice Maker">
+    <Document title={`${L.receipt} ${r.number}`} creator="Invoice Maker" producer="Invoice Maker">
       <Page size="A5" orientation="landscape" style={{ fontFamily: ctx.body, color: c.text, backgroundColor: c.paper, padding: 30 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', borderBottomWidth: 2, borderBottomColor: c.primary, paddingBottom: 10 }}>
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', maxWidth: '60%' }}>
@@ -62,22 +63,27 @@ function ReceiptDocument({ ctx, payment }: { ctx: DocCtx; payment: Payment }) {
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={{ fontFamily: ctx.head, fontWeight: 700, fontSize: fz.xl + 2, color: c.primary, letterSpacing: 1.5 }}>{L.receipt}</Text>
-            <Text style={{ fontSize: fz.base, color: c.accent, fontWeight: 700, marginTop: 2 }}>{payment.receiptNumber}</Text>
+            <Text style={{ fontSize: fz.base, color: c.accent, fontWeight: 700, marginTop: 2 }}>{r.number}</Text>
           </View>
         </View>
         <View style={{ marginTop: 10 }}>
-          {row(L.receivedFrom, ctx.inv.client.name || '-', true)}
+          {row(L.receivedFrom, r.receivedFrom || '-', true)}
           {row(L.amountOf, words)}
-          {row(L.forPayment, `${purpose} (${L.invoiceRef} ${ctx.inv.number})${payment.note ? `. ${payment.note}` : ''}`)}
-          {payment.method ? row(L.method, payment.method) : null}
+          {row(L.forPayment, r.purpose)}
+          {r.method ? row(L.method, r.method) : null}
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 16 }}>
           <View style={{ backgroundColor: hexAlpha(c.primary, 0.08), borderRadius: 4, paddingVertical: 8, paddingHorizontal: 14 }}>
             <Label ctx={ctx}>{L.amount}</Label>
-            <Text style={{ fontFamily: ctx.head, fontWeight: 700, fontSize: fz.xl + 2 }}>{ctx.money(payment.amount)}</Text>
+            <Text style={{ fontFamily: ctx.head, fontWeight: 700, fontSize: fz.xl + 2 }}>{ctx.money(r.amount)}</Text>
           </View>
+          {r.stampDuty ? (
+            <View style={{ width: 70, height: 70, borderWidth: 0.8, borderStyle: 'dashed', borderColor: c.muted, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: fz.xs, color: c.muted, textAlign: 'center' }}>{L.stampDuty}</Text>
+            </View>
+          ) : null}
           <View style={{ width: 160, alignItems: 'center' }}>
-            <Text style={{ fontSize: fz.sm, color: c.muted }}>{formatDate(payment.date, ctx.inv.lang)}</Text>
+            <Text style={{ fontSize: fz.sm, color: c.muted }}>{formatDate(r.date, ctx.inv.lang)}</Text>
             <Text style={{ fontSize: fz.sm, color: c.muted }}>{L.receiver}</Text>
             <View style={{ height: 56, width: 160, alignItems: 'center', justifyContent: 'center' }}>
               {ctx.s.stamp && ctx.tpl.show.stamp ? <Image src={ctx.s.stamp} style={{ position: 'absolute', height: 56, width: 56, left: 30, objectFit: 'contain', opacity: 0.85 }} /> : null}

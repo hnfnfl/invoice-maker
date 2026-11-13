@@ -40,6 +40,7 @@ const DOC = {
     receiver: 'Penerima',
     method: 'Metode',
     invoiceRef: 'Invoice',
+    stampDuty: 'Tempel meterai',
   },
   en: {
     billTo: 'Bill to',
@@ -80,6 +81,7 @@ const DOC = {
     receiver: 'Received by',
     method: 'Method',
     invoiceRef: 'Invoice',
+    stampDuty: 'Affix stamp duty',
   },
 } as const;
 

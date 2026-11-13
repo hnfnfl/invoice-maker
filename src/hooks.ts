@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, getSettings } from './db';
 import { BUILTIN_TEMPLATES, normalizeTemplate } from './templates';
-import type { Invoice, Settings, Status, TemplateConfig } from './types';
+import type { Invoice, Payment, Settings, Status, TemplateConfig } from './types';
 
 export function useSettings(): Settings | undefined {
   return useLiveQuery(() => getSettings(), []);
@@ -47,6 +47,34 @@ export function useInvoicePdf(
     }, delay);
     return () => clearTimeout(timer);
   }, [inv, tpl, settings, status]);
+
+  return state;
+}
+
+export function useReceiptPdf(
+  inv: Invoice | undefined,
+  payment: Payment | undefined,
+  tpl: TemplateConfig | undefined,
+  settings: Settings | undefined,
+  delay = 350,
+): PdfState {
+  const [state, setState] = useState<PdfState>({ blob: null, busy: false, error: null });
+  const run = useRef(0);
+  useEffect(() => {
+    if (!inv || !payment || !tpl || !settings) return;
+    const id = ++run.current;
+    setState((s) => ({ ...s, busy: true }));
+    const timer = setTimeout(async () => {
+      try {
+        const { renderReceiptPdf } = await import('./pdf/document');
+        const blob = await renderReceiptPdf(inv, payment, tpl, settings);
+        if (id === run.current) setState({ blob, busy: false, error: null });
+      } catch (e) {
+        if (id === run.current) setState((s) => ({ ...s, busy: false, error: (e as Error).message || 'PDF gagal dibuat.' }));
+      }
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [inv, payment, tpl, settings]);
 
   return state;
 }
