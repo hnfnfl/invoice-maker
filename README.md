@@ -37,6 +37,7 @@ Aplikasi pembuat invoice dan kwitansi untuk freelancer, UMKM, dan usaha jasa di 
 - **Pesan otomatis**: Template pesan dengan nama klien, nomor, total, dan jatuh tempo; berganti jadi pesan pengingat saat invoice hampir atau sudah lewat tempo
 - **Status jelas**: Draft, terkirim, dibayar sebagian, lunas, lewat tempo, dan batal
 - **Catat pembayaran**: Pembayaran penuh atau cicilan, lalu cetak **kwitansi** bernomor dengan terbilang
+- **Kwitansi yang bisa diedit**: Menu Kwitansi mengumpulkan semua kwitansi. Nomor, penerima, nominal, keperluan, tanggal, dan metode bisa diubah bebas, plus kotak meterai otomatis di atas Rp5.000.000
 - **Rekening & QRIS**: Tampilkan beberapa rekening bank dan gambar QRIS di invoice
 
 ### Template & desain

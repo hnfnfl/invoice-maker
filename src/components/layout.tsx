@@ -3,10 +3,11 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import type { Status } from '../types';
 import { createInvoice, updateSettings } from '../db';
 import { useSettings } from '../hooks';
-import { IconBack, IconChart, IconDoc, IconGear, IconLayout, IconMoon, IconPeople, IconPlus, IconSidebar, IconSun } from './icons';
+import { IconBack, IconChart, IconDoc, IconGear, IconLayout, IconMoon, IconPeople, IconPlus, IconReceipt, IconSidebar, IconSun } from './icons';
 
 const NAV = [
   { to: '/', label: 'Invoice', icon: IconDoc, end: true },
+  { to: '/kwitansi', label: 'Kwitansi', icon: IconReceipt },
   { to: '/klien', label: 'Klien', icon: IconPeople },
   { to: '/laporan', label: 'Laporan', icon: IconChart },
   { to: '/template', label: 'Template', icon: IconLayout },
@@ -222,7 +223,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Mobile Bottom Navigation */}
       <nav aria-label="Navigasi utama mobile" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur-md md:hidden">
-        <div className="grid grid-cols-5">
+        <div className="grid grid-cols-6">
           {NAV.map((n) => (
             <NavLink
               key={n.to}

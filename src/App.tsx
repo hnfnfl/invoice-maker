@@ -12,6 +12,8 @@ import { TemplateEditor } from './pages/TemplateEditor';
 import { SettingsPage } from './pages/Settings';
 import { Products } from './pages/Products';
 import { Reports } from './pages/Reports';
+import { ReceiptEditor } from './pages/ReceiptEditor';
+import { ReceiptList } from './pages/ReceiptList';
 import { EmptyState } from './components/ui';
 import { Link } from 'react-router-dom';
 
@@ -47,6 +49,8 @@ export function App() {
         <Route path="/pengaturan" element={<SettingsPage />} />
         <Route path="/produk" element={<Products />} />
         <Route path="/laporan" element={<Reports />} />
+        <Route path="/kwitansi" element={<ReceiptList />} />
+        <Route path="/kwitansi/:invoiceId/:paymentId" element={<ReceiptEditor />} />
         <Route
           path="*"
           element={

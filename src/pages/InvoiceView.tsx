@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { createRevision, createSettlement, db, deleteInvoice, deriveStatus, duplicateInvoice, ensureReceipt, getTemplate } from '../db';
+import { createRevision, createSettlement, db, deleteInvoice, deletePayment, deriveStatus, duplicateInvoice, getTemplate } from '../db';
 import { useInvoicePdf, useSettings } from '../hooks';
 import { computeTotals, displayDecimals, formatMoney } from '../lib/money';
 import { addDays } from '../lib/id';
@@ -13,6 +13,7 @@ import { PageHeader, StatusStamp } from '../components/layout';
 import { Button, Card, EmptyState, Field, IconButton, Loading, NumberInput, Sheet, TextInput, useUI } from '../components/ui';
 import { IconCopy, IconDownload, IconEdit, IconMore, IconReceipt, IconShare, IconTrash, IconWallet } from '../components/icons';
 import { PdfPreview } from '../components/PdfPreview';
+import { resolveReceipt } from '../lib/receipt';
 
 export function buildMessage(tpl: string, inv: Invoice, s: Settings) {
   const t = computeTotals(inv);
@@ -299,7 +300,7 @@ export function InvoiceView() {
             </Card>
           )}
 
-          <PaymentsCard inv={inv} settings={settings} tpl={tpl} />
+          <PaymentsCard inv={inv} />
         </div>
       </div>
 
@@ -387,80 +388,42 @@ function MenuItem({ label, hint, onClick, danger, icon }: { label: string; hint?
   );
 }
 
-function PaymentsCard({ inv, settings, tpl }: { inv: Invoice; settings: Settings; tpl?: TemplateConfig }) {
-  const { toast, confirm } = useUI();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [ready, setReady] = useState<File | null>(null);
+function PaymentsCard({ inv }: { inv: Invoice }) {
+  const { confirm } = useUI();
   if (inv.payments.length === 0) return null;
-
-  const receipt = async (p: Payment) => {
-    if (!tpl) return;
-    setBusy(p.id);
-    try {
-      await ensureReceipt(inv.id, p.id);
-      const payment = (await db.invoices.get(inv.id))?.payments.find((x) => x.id === p.id) ?? p;
-      const { renderReceiptPdf } = await import('../pdf/document');
-      const blob = await renderReceiptPdf(inv, payment, tpl, settings);
-      // Sharing needs a fresh tap: iOS rejects navigator.share once the original gesture has expired during rendering.
-      setReady(new File([blob], `${safeFileName(payment.receiptNumber!)}.pdf`, { type: 'application/pdf' }));
-    } catch (e) {
-      toast(`Kwitansi gagal dibuat: ${(e as Error).message}`, 'error');
-    } finally {
-      setBusy(null);
-    }
-  };
 
   return (
     <Card className="mb-3">
       <h2 className="mb-2 text-[15px] font-bold">Pembayaran</h2>
       <ul className="divide-y divide-line">
-        {inv.payments.map((p) => (
-          <li key={p.id} className="flex items-center gap-2 py-2.5">
-            <div className="min-w-0 flex-1">
-              <p className="num font-bold">{formatMoney(p.amount, inv.currency, inv.lang)}</p>
-              <p className="truncate text-xs text-muted">
-                {formatDate(p.date, 'id', 'short')}
-                {p.method ? ` · ${p.method}` : ''}
-                {p.receiptNumber ? ` · ${p.receiptNumber}` : ''}
-              </p>
-            </div>
-            <Button size="sm" onClick={() => receipt(p)} disabled={busy === p.id || !tpl}>
-              <IconReceipt size={16} /> {busy === p.id ? 'Membuat...' : 'Kwitansi'}
-            </Button>
-            <IconButton
-              label="Hapus pembayaran"
-              onClick={async () => {
-                const ok = await confirm({ title: 'Hapus catatan pembayaran?', message: `${formatMoney(p.amount, inv.currency)} pada ${formatDate(p.date, 'id')}.`, confirmLabel: 'Hapus', danger: true });
-                if (ok) await db.invoices.update(inv.id, { payments: inv.payments.filter((x) => x.id !== p.id), updatedAt: Date.now() });
-              }}
-            >
-              <IconTrash size={18} />
-            </IconButton>
-          </li>
-        ))}
+        {inv.payments.map((p) => {
+          const number = resolveReceipt(inv, p).number;
+          return (
+            <li key={p.id} className="flex items-center gap-2 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="num font-bold">{formatMoney(p.amount, inv.currency, inv.lang)}</p>
+                <p className="truncate text-xs text-muted">
+                  {formatDate(p.date, 'id', 'short')}
+                  {p.method ? ` · ${p.method}` : ''}
+                  {number ? ` · ${number}` : ''}
+                </p>
+              </div>
+              <Link to={`/kwitansi/${inv.id}/${p.id}`} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-semibold hover:bg-sunken">
+                <IconReceipt size={16} /> Kwitansi
+              </Link>
+              <IconButton
+                label="Hapus pembayaran"
+                onClick={async () => {
+                  const ok = await confirm({ title: 'Hapus catatan pembayaran?', message: `${formatMoney(p.amount, inv.currency)} pada ${formatDate(p.date, 'id')}. Kwitansinya ikut terhapus.`, confirmLabel: 'Hapus', danger: true });
+                  if (ok) await deletePayment(inv.id, p.id);
+                }}
+              >
+                <IconTrash size={18} />
+              </IconButton>
+            </li>
+          );
+        })}
       </ul>
-      <Sheet open={!!ready} onClose={() => setReady(null)} title="Kwitansi siap">
-        <p className="mb-4 font-mono text-sm text-clay">{ready?.name}</p>
-        <div className="flex flex-col gap-2">
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={async () => {
-              if (ready && (await shareOrDownload(ready)) !== 'cancelled') setReady(null);
-            }}
-          >
-            <IconShare size={18} /> Bagikan kwitansi
-          </Button>
-          <Button
-            onClick={() => {
-              if (ready) downloadFile(ready);
-              setReady(null);
-            }}
-          >
-            <IconDownload size={18} /> Unduh
-          </Button>
-        </div>
-      </Sheet>
     </Card>
   );
 }
