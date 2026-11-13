@@ -106,6 +106,17 @@ export interface Adjustment {
   amount: number;
 }
 
+// Fields the user edited on a receipt. Anything undefined follows the invoice/payment automatically.
+export interface ReceiptOverrides {
+  number?: string;
+  receivedFrom?: string;
+  amount?: number;
+  purpose?: string;
+  date?: string;
+  method?: string;
+  stampDuty?: boolean;
+}
+
 export interface Payment {
   id: string;
   date: string;
@@ -113,6 +124,9 @@ export interface Payment {
   method: string;
   note: string;
   receiptNumber?: string;
+  receiptKey?: string;
+  receiptSeq?: number;
+  receipt?: ReceiptOverrides;
 }
 
 export type StoredStatus = 'draft' | 'sent' | 'void';
